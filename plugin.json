@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ryu.news",
+  "version": "1.0.0",
+  "description": "Your own newsroom: feeds and pages pulled in on a schedule, the same story collapsed across every outlet covering it, a brief written from those clusters, and watches that fire on a burst you can explain.",
+  "keywords": [
+    "news",
+    "rss",
+    "feeds",
+    "briefing",
+    "monitoring",
+    "clustering"
+  ],
+  "extensions": {
+    "com.ryuhq.ryu": {
+      "id": "@ryu/news",
+      "displayName": "Wire"
+    }
+  }
+}
