@@ -1,0 +1,27 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ryu.news",
+  "version": "0.1.14",
+  "description": "Your own newsroom, running on your node. Wire pulls RSS, Atom and JSON Feed in on a schedule — parsed natively, with conditional GET, per-source backoff, and a source marked `failing` after three consecutive misses rather than quietly going silent — then does the work an aggregator does for you and never shows its working. Duplicates die twice: URLs are canonicalized (redirects followed, `utm_*` and friends stripped, query pairs sorted) and content is fingerprinted with a banded 64-bit SimHash over word shingles, which is what catches one wire story running under six different headlines on six different sites. What survives is clustered across outlets by shingle similarity, entity overlap and title overlap, so the unit you read is a story with *n* sources attached and a visible spread of framings, not the same paragraph six times. A watch is a real boolean query — `AND` / `OR` / `NOT`, phrases, `title:` and `source:` scoping — parsed to an AST and evaluated against tokenized text, and it refuses to save on a parse error with the column, because a watch that silently matches nothing is worse than one that will not save. Breaking is defined, not guessed: a topic's hourly volume against a baseline built from the same hour of day over the trailing week, carrying its z-score and the articles that caused it. Ranking is recency half-life × source count × topic match × unread, every factor displayable. A model is involved in exactly two places — two sentences per cluster in the brief, and one neutral headline for a story eight outlets titled eight ways — and the raw cluster stays inspectable underneath both. Nothing leaves the node but the fetches, and those go to the sources you added.",
+  "keywords": [
+    "news",
+    "rss",
+    "atom",
+    "feeds",
+    "briefing",
+    "monitoring",
+    "clustering",
+    "dedupe"
+  ],
+  "extensions": {
+    "com.ryuhq.ryu": {
+      "id": "@ryu/news",
+      "displayName": "Wire",
+      "mcp": {
+        "news": {
+          "description": "Your reviewed feed as tools. `search` queries the LOCAL corpus — the sources you added, already deduplicated and clustered — with no web call at all, so an agent answering \"what happened with X this week\" reads what you curated instead of whatever a fresh search returns. `brief` fetches a generated digest, `story` opens one cluster with every outlet covering it, and `topics` lists the saved watches and what they are currently matching."
+        }
+      }
+    }
+  }
+}
