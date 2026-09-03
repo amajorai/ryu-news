@@ -1,0 +1,97 @@
+[package]
+name = "ryu-news"
+# The version the publish train is on. `tools/publish-crates.sh` reads TRAIN_VERSION
+# from the FIRST crate in its list and requires every crate in the set to be on it,
+# so an apps-store backend that drifts to its own version silently breaks the
+# release. Every other `apps-store/*/backend` is on 0.1.9; so is this one.
+version = "0.2.7"
+edition = "2021"
+license = "Apache-2.0"
+description = "Wire for Ryu: a personal newsroom that owns its whole spine out-of-process — RSS/Atom/JSON-Feed ingest with conditional GET and per-source backoff, two-layer dedupe (URL canonicalization plus banded 64-bit SimHash over content shingles), cross-outlet story clustering, hour-of-day-baselined burst detection, a boolean topic query language compiled to an AST, and explainable feed ranking — as a SQLite-backed sidecar Core spawns and proxies to on loopback. ZERO dependency on apps/core."
+repository = "https://github.com/amajorai/ryu"
+
+# Sidecar-ONLY: this crate is a process, not a library Core links. The shape is
+# `ryu-social`'s / `ryu-mail`'s: one `[[bin]]`, and no `lib.rs` for Core to link.
+# Core reaches this app exclusively through the generic ext-proxy
+# (`/api/ext/@ryu/news/*` + the `public_mount` at `/api/news`), so there is nothing
+# for Core to link and no `apps/core` dep in either direction.
+#
+# The `[lib]` below exists ONLY so the deterministic spine (the feed parser, URL
+# canonicalization, SimHash, the clusterer, the burst test, the topic-query parser
+# and evaluator) is unit-testable and so the `mcp` subcommand and the HTTP layer
+# share one implementation — it is NOT a Core-facing surface and nothing outside
+# this crate depends on it. `ryu-reasoning` has the same lib-plus-bin shape for the
+# same reason.
+[[bin]]
+name = "ryu-news"
+path = "src/main.rs"
+
+[lib]
+name = "ryu_news"
+path = "src/lib.rs"
+
+# Versions are matched to apps/core/Cargo.toml (and to the sibling apps-store
+# backends) so this crate joining the root workspace via the `apps-store/*/backend`
+# member glob introduces NO version skew for any other job building the tree.
+#
+# NOTHING here resolves a NEW package into the root Cargo.lock, and for this app that
+# is the load-bearing constraint. The obvious dependencies for a feed reader — `feed-rs`,
+# `quick-xml`, `scraper`/`html5ever` — are none of them in the lockfile, and several
+# jobs share this working tree. Pulling a dozen transitive crates into the shared
+# lockfile to strip some tags is not a trade worth making, so the RSS/Atom
+# tokenizer (`feed.rs`) and the HTML-to-text pass (`extract.rs`) are written by
+# hand. JSON Feed rides `serde_json`, which is already here.
+#
+# `utoipa` below is the one dependency added after that rule was written, and it does
+# not break it: it is already pinned at 5.5.0 workspace-wide by the eleven sibling
+# `apps-store/*/backend` crates that serve an OpenAPI document, so adding it here
+# resolves nothing new — only a dep edge.
+[dependencies]
+ryu-sidecar-runtime = { path = "../crates/core/sidecar-runtime", version = "0.2.7" }
+# `full` is required, not optional: the bin needs the multi-thread runtime + macros
+# + net for `#[tokio::main]` / `TcpListener` / `axum::serve`, and the poll loop and
+# brief scheduler need `tokio::time` + `tokio::spawn`.
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+# Every stored instant is an INTEGER epoch-millis column; chrono turns those into
+# the hour buckets the burst baseline is built from.
+chrono = { version = "0.4", features = ["serde"] }
+# The brief fires at a local wall-clock time ("07:30") and the burst baseline is
+# built per hour-of-day, so both need real IANA zone resolution — a fixed UTC offset
+# gets both wrong for half the year in most of the world. Same 0.10 line apps/core
+# already pins.
+chrono-tz = "0.10"
+uuid = { version = "1", features = ["v4", "serde"] }
+rusqlite = { version = "0.40.0", features = ["bundled"] }
+# Fetching feeds and pages, the `web.extract` capability call for sources with no
+# usable feed, and the `hook:side-model` callback into Core for the two model edges
+# (cluster titling and brief prose). Everything else in this crate is offline.
+reqwest = { version = "0.12", features = ["json"] }
+tracing = "0.1"
+# The OpenAPI document Core fetches from `GET /openapi.json` on this sidecar's first
+# Healthy edge and lowers into searchable LLM tools. Without it this app's nineteen
+# routes contribute ZERO tools no matter how good they are, because tool derivation
+# reads the document, not the router — and the stdio `mcp_servers` entry only covers
+# four read verbs, so the whole write surface would stay unreachable. Pinned to the
+# same 5.5.0 the sibling backends resolve; `utoipa-axum` is deliberately NOT used (it
+# is not in the lockfile), which is why the `paths(...)` list in `api.rs` is
+# hand-written.
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
+# Sidecar-binary-only deps (data-dir resolution + logging), mirroring `ryu-social`.
+dirs = "5"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# The app-event emit client: raises the `contributes.hook_events` this app declares
+# in its manifest (`brief.ready` / `topic.breaking` / `story.developing`) so plugin
+# hooks and event-triggered workflows can react without this crate knowing they
+# exist. It is a standalone crate holding only the OUTBOUND half of the emit call,
+# so it links none of Core and does not violate the zero-Core rule. Emitting is
+# best-effort and no-ops when the process is not Core-hosted, so it stays safe under
+# this crate's own tests and any standalone run.
+#
+# The `version` alongside the `path` is mandatory, not decorative: the published
+# satellite tree has no sibling `crates/`, and the version is what lets it resolve
+# this dep from the registry instead.
+ryu-app-events = { path = "../crates/core/app-events", version = "0.2.7" }
